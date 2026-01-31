@@ -5,7 +5,13 @@ proto_fmt:
     buf format -d --exit-code
 
 proto_lint:
+    #!/usr/bin/env sh
+    set -eu
     buf lint
+    tmpdir=$(mktemp -d)
+    trap 'rm -rf "$tmpdir"' EXIT
+    buf build -o "$tmpdir/descriptor.pb"
+    (cd proto && api-linter -I . --descriptor-set-in "$tmpdir/descriptor.pb" --set-exit-status $(find . -name "*.proto" -print))
 
 clippy:
     cargo clippy --all-targets --all-features -- -D warnings

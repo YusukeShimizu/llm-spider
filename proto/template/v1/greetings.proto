@@ -1,3 +1,12 @@
+// This file demonstrates a "resource-oriented" API design that follows Google AIP:
+// - https://google.aip.dev/
+//
+// It also demonstrates request validation using Protovalidate:
+// - https://github.com/bufbuild/protovalidate
+//
+// The API surface is intentionally small and domain-agnostic so it can act as a
+// template. Replace the resource and service names with your own project terms.
+
 syntax = "proto3";
 
 package template.v1;
@@ -11,14 +20,9 @@ import "google/protobuf/empty.proto";
 import "google/protobuf/field_mask.proto";
 import "google/protobuf/timestamp.proto";
 
-// This file demonstrates a "resource-oriented" API design that follows Google AIP:
-// - https://google.aip.dev/
-//
-// It also demonstrates request validation using Protovalidate:
-// - https://github.com/bufbuild/protovalidate
-//
-// The API surface is intentionally small and domain-agnostic so it can act as a
-// template. Replace the resource and service names with your own project terms.
+option java_multiple_files = true;
+option java_outer_classname = "GreetingsProto";
+option java_package = "com.example.template.v1";
 
 // GreetingService provides standard CRUD-style methods for the Greeting resource.
 //
@@ -56,7 +60,7 @@ service GreetingService {
   //
   // Notes:
   // - `greeting_id` is optional. If omitted, the server generates an ID.
-  // - `greeting.name` is output-only and ignored if set by the client.
+  // - The server ignores `greeting.name` if it is set by the client.
   //
   // Errors:
   // - `INVALID_ARGUMENT` if the request is malformed or fails validation.
@@ -66,7 +70,7 @@ service GreetingService {
       post: "/v1/greetings"
       body: "greeting"
     };
-    option (google.api.method_signature) = "greeting";
+    option (google.api.method_signature) = "greeting,greeting_id";
   }
 
   // Updates an existing Greeting.
@@ -103,6 +107,8 @@ message Greeting {
   option (google.api.resource) = {
     type: "template.googleapis.com/Greeting"
     pattern: "greetings/{greeting}"
+    singular: "greeting"
+    plural: "greetings"
   };
 
   // The resource name of the Greeting.
@@ -110,9 +116,10 @@ message Greeting {
   // Format:
   // - `greetings/{greeting}`
   //
-  // Output only. Clients must treat this value as opaque and MUST NOT parse it.
+  // Identifier. This value is assigned by the server on create.
+  // Clients must treat this value as opaque and MUST NOT parse it.
   string name = 1 [
-    (google.api.field_behavior) = OUTPUT_ONLY,
+    (google.api.field_behavior) = IDENTIFIER,
     (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE,
     (buf.validate.field).string.pattern = "^greetings/[A-Za-z0-9][A-Za-z0-9-]{0,62}$"
   ];
@@ -133,6 +140,7 @@ message Greeting {
   google.protobuf.Timestamp create_time = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
 
+// Request message for `GreetingService.GetGreeting`.
 message GetGreetingRequest {
   // The resource name of the Greeting to retrieve.
   //
@@ -146,32 +154,44 @@ message GetGreetingRequest {
   ];
 }
 
+// Request message for `GreetingService.ListGreetings`.
 message ListGreetingsRequest {
   // The maximum number of Greetings to return.
   //
   // If this value is 0, the server selects a default.
   int32 page_size = 1 [
+    (google.api.field_behavior) = OPTIONAL,
     (buf.validate.field).int32.gte = 0,
     (buf.validate.field).int32.lte = 1000
   ];
 
   // A page token, received from a previous `ListGreetings` call.
-  string page_token = 2 [(buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
+  string page_token = 2 [
+    (google.api.field_behavior) = OPTIONAL,
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
+  ];
 
   // Optional filter expression.
   //
   // Caution:
   // - Filter semantics are API-specific and MUST be documented if supported.
   // - Servers SHOULD reject unknown filter fields with `INVALID_ARGUMENT`.
-  string filter = 3 [(buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
+  string filter = 3 [
+    (google.api.field_behavior) = OPTIONAL,
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
+  ];
 
   // Optional sort order.
   //
   // Caution:
   // - Servers SHOULD document supported fields and ordering semantics.
-  string order_by = 4 [(buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
+  string order_by = 4 [
+    (google.api.field_behavior) = OPTIONAL,
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
+  ];
 }
 
+// Response message for `GreetingService.ListGreetings`.
 message ListGreetingsResponse {
   // The list of Greetings.
   repeated Greeting greetings = 1;
@@ -180,6 +200,7 @@ message ListGreetingsResponse {
   string next_page_token = 2;
 }
 
+// Request message for `GreetingService.CreateGreeting`.
 message CreateGreetingRequest {
   // The Greeting to create.
   //
@@ -199,11 +220,13 @@ message CreateGreetingRequest {
   // Errors:
   // - `ALREADY_EXISTS` if the requested ID is already in use.
   string greeting_id = 2 [
+    (google.api.field_behavior) = OPTIONAL,
     (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE,
     (buf.validate.field).string.pattern = "^[a-z][a-z0-9-]{0,62}$"
   ];
 }
 
+// Request message for `GreetingService.UpdateGreeting`.
 message UpdateGreetingRequest {
   // The Greeting to update.
   //
@@ -215,14 +238,14 @@ message UpdateGreetingRequest {
 
   // The list of fields to update.
   //
-  // Required for update methods. The server MUST ignore paths that are
-  // output-only, and SHOULD reject attempts to update them with `INVALID_ARGUMENT`.
-  google.protobuf.FieldMask update_mask = 2 [
-    (google.api.field_behavior) = REQUIRED,
-    (buf.validate.field).required = true
-  ];
+  // If omitted, the server treats this as a full update of the mutable fields.
+  //
+  // The server MUST ignore paths that are output-only, and SHOULD reject
+  // attempts to update them with `INVALID_ARGUMENT`.
+  google.protobuf.FieldMask update_mask = 2 [(google.api.field_behavior) = OPTIONAL];
 }
 
+// Request message for `GreetingService.DeleteGreeting`.
 message DeleteGreetingRequest {
   // The resource name of the Greeting to delete.
   //
