@@ -77,15 +77,21 @@ impl Frontier {
 
 pub fn crawl(
     request: &UserRequest,
-    openai: &crate::openai::OpenAiClient,
+    openai: &dyn crate::openai::OpenAiApi,
+) -> anyhow::Result<CrawlResult> {
+    let fetcher = SpiderPageFetcher::new().context("init spider page fetcher")?;
+    crawl_with_fetcher(request, openai, &fetcher)
+}
+
+pub fn crawl_with_fetcher(
+    request: &UserRequest,
+    openai: &dyn crate::openai::OpenAiApi,
+    fetcher: &dyn PageFetcher,
 ) -> anyhow::Result<CrawlResult> {
     let started_at = Instant::now();
     let hits = openai
         .web_search(&request.query, request.search_limit)
         .context("web search")?;
-
-    let runtime = crate::spider_rs::tokio::runtime::Runtime::new()
-        .context("build tokio runtime for spider")?;
 
     let mut frontier = Frontier::default();
     for hit in hits {
@@ -135,7 +141,7 @@ pub fn crawl(
         }
 
         let trust_tier = classify_trust_tier(&url);
-        let scraped = match scrape_single_page_with_spider(&runtime, &url) {
+        let scraped = match fetcher.fetch(&url) {
             Ok(scraped) => scraped,
             Err(err) => {
                 warn!(url = %url, "spider fetch failed; skipping: {err:#}");
@@ -336,69 +342,91 @@ fn is_local_ipv4(ip: std::net::Ipv4Addr) -> bool {
         || ip.is_unspecified()
 }
 
-#[derive(Debug)]
-struct SpiderScrape {
-    html: String,
-    links: Vec<Url>,
-    robots_delay: Duration,
+#[derive(Debug, Clone)]
+pub struct FetchedPage {
+    pub html: String,
+    pub links: Vec<Url>,
+    pub robots_delay: Duration,
 }
 
-fn scrape_single_page_with_spider(
-    runtime: &crate::spider_rs::tokio::runtime::Runtime,
-    url: &Url,
-) -> anyhow::Result<SpiderScrape> {
-    let mut website = crate::spider_rs::website::Website::new(url.as_str());
-    website
-        .with_respect_robots_txt(true)
-        .with_user_agent(Some(USER_AGENT))
-        .with_request_timeout(Some(DEFAULT_REQUEST_TIMEOUT))
-        .with_max_bytes_allowed(Some(MAX_RESPONSE_BYTES as u64))
-        .with_external_domains(Some(std::iter::once("*".to_owned())))
-        .with_limit(1);
+pub trait PageFetcher {
+    fn fetch(&self, url: &Url) -> anyhow::Result<FetchedPage>;
+}
 
-    let (client, control) = runtime.block_on(async { website.setup().await });
+struct SpiderPageFetcher {
+    runtime: crate::spider_rs::tokio::runtime::Runtime,
+}
 
-    let robots_delay = website.get_delay();
-
-    if !website.is_allowed_robots(url.as_str()) {
-        anyhow::bail!("blocked by robots.txt");
+impl SpiderPageFetcher {
+    fn new() -> anyhow::Result<Self> {
+        let runtime = crate::spider_rs::tokio::runtime::Runtime::new()
+            .context("build tokio runtime for spider")?;
+        Ok(Self { runtime })
     }
 
-    let mut page = runtime
-        .block_on(async { crate::spider_rs::page::Page::new_page(url.as_str(), &client).await });
+    fn fetch_with_spider(&self, url: &Url) -> anyhow::Result<FetchedPage> {
+        let runtime = &self.runtime;
 
-    if let Some((_state, join)) = control {
-        join.abort();
-    }
+        let mut website = crate::spider_rs::website::Website::new(url.as_str());
+        website
+            .with_respect_robots_txt(true)
+            .with_user_agent(Some(USER_AGENT))
+            .with_request_timeout(Some(DEFAULT_REQUEST_TIMEOUT))
+            .with_max_bytes_allowed(Some(MAX_RESPONSE_BYTES as u64))
+            .with_external_domains(Some(std::iter::once("*".to_owned())))
+            .with_limit(1);
 
-    if !page.status_code.is_success() {
-        anyhow::bail!("http status: {}", page.status_code);
-    }
+        let (client, control) = runtime.block_on(async { website.setup().await });
 
-    page.set_external(website.configuration.external_domains_caseless.clone());
+        let robots_delay = website.get_delay();
 
-    let selectors = crate::spider_rs::page::get_page_selectors(url.as_str(), true, true);
-    let base = Some(Box::new(url.clone()));
-    let links = runtime.block_on(async { page.links(&selectors, &base).await });
-
-    let mut out_links = Vec::<Url>::new();
-    for link in links {
-        let Ok(mut parsed) = Url::parse(link.as_ref()) else {
-            continue;
-        };
-        parsed.set_fragment(None);
-        if matches!(parsed.scheme(), "http" | "https") {
-            out_links.push(parsed);
+        if !website.is_allowed_robots(url.as_str()) {
+            anyhow::bail!("blocked by robots.txt");
         }
-    }
-    out_links.sort_by(|a, b| a.as_str().cmp(b.as_str()));
-    out_links.dedup_by(|a, b| a.as_str() == b.as_str());
 
-    Ok(SpiderScrape {
-        html: page.get_html(),
-        links: out_links,
-        robots_delay,
-    })
+        let mut page = runtime.block_on(async {
+            crate::spider_rs::page::Page::new_page(url.as_str(), &client).await
+        });
+
+        if let Some((_state, join)) = control {
+            join.abort();
+        }
+
+        if !page.status_code.is_success() {
+            anyhow::bail!("http status: {}", page.status_code);
+        }
+
+        page.set_external(website.configuration.external_domains_caseless.clone());
+
+        let selectors = crate::spider_rs::page::get_page_selectors(url.as_str(), true, true);
+        let base = Some(Box::new(url.clone()));
+        let links = runtime.block_on(async { page.links(&selectors, &base).await });
+
+        let mut out_links = Vec::<Url>::new();
+        for link in links {
+            let Ok(mut parsed) = Url::parse(link.as_ref()) else {
+                continue;
+            };
+            parsed.set_fragment(None);
+            if matches!(parsed.scheme(), "http" | "https") {
+                out_links.push(parsed);
+            }
+        }
+        out_links.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+        out_links.dedup_by(|a, b| a.as_str() == b.as_str());
+
+        Ok(FetchedPage {
+            html: page.get_html(),
+            links: out_links,
+            robots_delay,
+        })
+    }
+}
+
+impl PageFetcher for SpiderPageFetcher {
+    fn fetch(&self, url: &Url) -> anyhow::Result<FetchedPage> {
+        self.fetch_with_spider(url)
+    }
 }
 
 fn extract_excerpt_and_anchor_map(

@@ -7,6 +7,19 @@ use serde_json::{Value, json};
 use tracing::warn;
 use url::Url;
 
+pub trait OpenAiApi {
+    fn web_search(&self, query: &str, limit: usize) -> anyhow::Result<Vec<SearchHit>>;
+
+    fn select_child_links(
+        &self,
+        query: &str,
+        page_url: &Url,
+        page_excerpt: &str,
+        candidates: &[Value],
+        max_select: usize,
+    ) -> anyhow::Result<Vec<Url>>;
+}
+
 #[derive(Debug, Clone)]
 pub struct OpenAiClient {
     api_key: String,
@@ -20,6 +33,30 @@ pub struct OpenAiClient {
 pub struct SearchHit {
     pub url: Url,
     pub title: Option<String>,
+}
+
+impl OpenAiApi for OpenAiClient {
+    fn web_search(&self, query: &str, limit: usize) -> anyhow::Result<Vec<SearchHit>> {
+        OpenAiClient::web_search(self, query, limit)
+    }
+
+    fn select_child_links(
+        &self,
+        query: &str,
+        page_url: &Url,
+        page_excerpt: &str,
+        candidates: &[Value],
+        max_select: usize,
+    ) -> anyhow::Result<Vec<Url>> {
+        OpenAiClient::select_child_links(
+            self,
+            query,
+            page_url,
+            page_excerpt,
+            candidates,
+            max_select,
+        )
+    }
 }
 
 impl OpenAiClient {
