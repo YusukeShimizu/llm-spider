@@ -1,6 +1,8 @@
-# Rust Template
+# LLM Spider
 
-このリポジトリは、Rust プロジェクトを開始するためのテンプレートである。
+このリポジトリは、自然言語クエリから OpenAI Search でページを特定し、
+制約付きクロールで情報収集し、
+出典付き Markdown を生成する CLI（`llm-spider`）である。
 開発環境は Nix Flakes を正とし、ローカルの環境変数は direnv（`.envrc`）で管理する。
 
 ## Quick start
@@ -29,6 +31,15 @@ rust-analyzer が標準ライブラリ（`std`）を解析できるように、�
 ```sh
 cargo run -- hello
 cargo run -- hello --name Alice
+```
+
+`spider` サブコマンドで、自然言語クエリから OpenAI Search でページを特定し、
+制約付きでクロールして Markdown を出力する。
+クロールは `robots.txt` を尊重する。
+
+```sh
+export OPENAI_API_KEY=...
+cargo run -- spider --query "example query"
 ```
 
 ## Logging
@@ -64,5 +75,5 @@ CI では `just ci` がドキュメントの検査も実行する。
 
 ## テンプレートの置換
 
-- `Cargo.toml` の `name` をプロジェクト名に変更する。
-- `tests/` のバイナリ名（`cargo_bin("template")`）を変更後の名前に合わせる。
+- `Cargo.toml` の `name` は `llm-spider` である。
+- `tests/` はバイナリ名（`cargo_bin("llm-spider")`）に追従する。

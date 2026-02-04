@@ -1,7 +1,9 @@
-# Rust Template Specification
+# LLM Spider Specification
 
-このリポジトリは、Rust プロジェクトを開始するための汎用テンプレートである。
-本書（`spec.md`）は、テンプレートに含める機能と開発上の不変条件を定義する。
+このリポジトリは、自然言語クエリから OpenAI Search でページを特定し、
+制約付きで情報収集し、
+出典付き Markdown を生成する CLI（`llm-spider`）である。
+本書（`spec.md`）は、本プロジェクトに含める機能と開発上の不変条件を定義する。
 
 本書は、arXiv:2508.14511v2 に準拠する。
 対象論文のタイトルは「What You See Is What It Does」である。
@@ -71,6 +73,33 @@ operational principle
         => [ exit_code: 0 ; stdout: "Hello, world!\n" ]
     then hello [ name: "Alice" ]
         => [ exit_code: 0 ; stdout: "Hello, Alice!\n" ]
+```
+
+```text
+concept SpiderCLI
+purpose
+    自然言語クエリから OpenAI Search でページを特定し、
+    制約付きでページを収集し、出典付き Markdown を生成する。
+state
+    openai_api_key: string
+    search_limit: int
+    max_chars: int
+    min_sources: int
+    max_pages: int
+    max_depth: int
+    max_elapsed: string
+    max_child_candidates: int
+    max_children_per_page: int
+actions
+    crawl [ query: string ]
+        => [ exit_code: 0 ; stdout: "Markdown\n" ]
+        stdout は Markdown である。
+        stdout は出典 URL を含み、各出典の `TrustTier` を明示する。
+        クロールは `robots.txt` を尊重する。
+        収集量は `max_pages` / `max_depth` / `max_elapsed` で制限する。
+operational principle
+    after crawl [ query: "example query" ]
+        => [ exit_code: 0 ]
 ```
 
 ```text

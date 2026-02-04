@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use clap::{Args, Parser, Subcommand};
 
 #[derive(Debug, Parser)]
@@ -10,10 +12,48 @@ pub struct Cli {
 #[derive(Debug, Subcommand)]
 pub enum Command {
     Hello(HelloArgs),
+    Spider(SpiderArgs),
 }
 
 #[derive(Debug, Args)]
 pub struct HelloArgs {
     #[arg(long)]
     pub name: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct SpiderArgs {
+    #[arg(long)]
+    pub query: String,
+
+    #[arg(long, default_value_t = 4000)]
+    pub max_chars: usize,
+
+    #[arg(long, default_value_t = 3)]
+    pub min_sources: usize,
+
+    #[arg(long, default_value_t = 10)]
+    pub search_limit: usize,
+
+    #[arg(long, default_value_t = 20)]
+    pub max_pages: usize,
+
+    #[arg(long, default_value_t = 1)]
+    pub max_depth: usize,
+
+    #[arg(
+        long,
+        value_parser = humantime::parse_duration,
+        default_value = "30s"
+    )]
+    pub max_elapsed: Duration,
+
+    #[arg(long, default_value_t = 20)]
+    pub max_child_candidates: usize,
+
+    #[arg(long, default_value_t = 3)]
+    pub max_children_per_page: usize,
+
+    #[arg(long, default_value_t = false)]
+    pub allow_local: bool,
 }
