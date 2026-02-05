@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
-use llm_spider::openai::{OpenAiApi, SearchHit};
+use llm_spider::openai::{OpenAiApi, SearchHit, SelectedLink};
 use llm_spider::spider::{FetchedPage, PageFetcher, TrustTier, crawl_with_fetcher};
 use url::Url;
 
@@ -39,7 +39,11 @@ impl OpenAiApi for FakeOpenAi {
             .iter()
             .take(limit)
             .cloned()
-            .map(|url| SearchHit { url, title: None })
+            .map(|url| SearchHit {
+                url,
+                title: None,
+                trust_tier: TrustTier::Medium,
+            })
             .collect())
     }
 
@@ -50,14 +54,21 @@ impl OpenAiApi for FakeOpenAi {
         _page_excerpt: &str,
         _candidates: &[serde_json::Value],
         max_select: usize,
-    ) -> anyhow::Result<Vec<Url>> {
+    ) -> anyhow::Result<Vec<SelectedLink>> {
         self.select_calls.fetch_add(1, Ordering::Relaxed);
         let selected = self
             .selected_by_page
             .get(page_url.as_str())
             .cloned()
             .unwrap_or_default();
-        Ok(selected.into_iter().take(max_select).collect())
+        Ok(selected
+            .into_iter()
+            .take(max_select)
+            .map(|url| SelectedLink {
+                url,
+                trust_tier: TrustTier::Medium,
+            })
+            .collect())
     }
 }
 
@@ -175,7 +186,7 @@ fn spider_output_respects_max_chars() {
 }
 
 #[test]
-fn spider_llm_selects_child_links_only_when_needed() {
+fn spider_llm_selects_child_links_when_over_limit() {
     let start = "https://example.test/start";
     let a = "https://example.test/a";
     let b = "https://example.test/b";
@@ -198,6 +209,33 @@ fn spider_llm_selects_child_links_only_when_needed() {
 
     let result = crawl_with_fetcher(&req, &openai, &fetcher).expect("crawl");
     assert_eq!(result.sources.len(), 2);
+    assert_eq!(select_calls.load(Ordering::Relaxed), 1);
+}
+
+#[test]
+fn spider_llm_selects_child_links_even_when_under_limit() {
+    let start = "https://example.test/start";
+    let a = "https://example.test/a";
+    let b = "https://example.test/b";
+
+    let select_calls = Arc::new(AtomicUsize::new(0));
+    let mut openai = FakeOpenAi::default()
+        .with_hits(vec![start])
+        .with_selected(start, vec![a, b]);
+    openai.select_calls = Arc::clone(&select_calls);
+
+    let fetcher = FakeFetcher::default()
+        .with_page(start, "<main>start</main>", vec![a, b])
+        .with_page(a, "<main>a</main>", vec![])
+        .with_page(b, "<main>b</main>", vec![]);
+
+    let mut req = request("q");
+    req.max_pages = 3;
+    req.max_depth = 1;
+    req.max_children_per_page = 3;
+
+    let result = crawl_with_fetcher(&req, &openai, &fetcher).expect("crawl");
+    assert_eq!(result.sources.len(), 3);
     assert_eq!(select_calls.load(Ordering::Relaxed), 1);
 }
 

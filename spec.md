@@ -82,6 +82,7 @@ purpose
     制約付きでページを収集し、出典付き Markdown を生成する。
 state
     openai_api_key: string
+    reasoning_effort: string
     search_limit: int
     max_chars: int
     min_sources: int
@@ -95,6 +96,10 @@ actions
         => [ exit_code: 0 ; stdout: "Markdown\n" ]
         stdout は Markdown である。
         stdout は出典 URL を含み、各出典の `TrustTier` を明示する。
+        `TrustTier` の判定は LLM に委ねる。
+        `TrustTier` は URL/ドメインのハードコード規則に依存しない。
+        推論量は `reasoning_effort` で指定できる。
+        `reasoning_effort` のデフォルトは `medium` である。
         クロールは `robots.txt` を尊重する。
         収集量は `max_pages` / `max_depth` / `max_elapsed` で制限する。
 operational principle

@@ -2,6 +2,8 @@ use std::time::Duration;
 
 use clap::{Args, Parser, Subcommand};
 
+use crate::openai::ReasoningEffort;
+
 #[derive(Debug, Parser)]
 #[command(author, version, about)]
 pub struct Cli {
@@ -25,6 +27,13 @@ pub struct HelloArgs {
 pub struct SpiderArgs {
     #[arg(long)]
     pub query: String,
+
+    #[arg(
+        long,
+        value_enum,
+        help = "Reasoning effort (default: medium; env: LLM_SPIDER_OPENAI_REASONING_EFFORT)"
+    )]
+    pub reasoning_effort: Option<ReasoningEffort>,
 
     #[arg(long, default_value_t = 4000)]
     pub max_chars: usize,

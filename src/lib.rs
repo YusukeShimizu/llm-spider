@@ -7,3 +7,4 @@ pub mod greeting;
 pub mod logging;
 pub mod openai;
 pub mod spider;
+pub mod trust;

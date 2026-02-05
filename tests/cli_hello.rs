@@ -27,3 +27,12 @@ fn rust_log_debug_emits_debug_line_to_stderr() {
         .success()
         .stderr(predicate::str::contains("parsed cli"));
 }
+
+#[test]
+fn spider_help_includes_reasoning_effort_flag() {
+    let mut cmd = assert_cmd::cargo::cargo_bin_cmd!("llm-spider");
+    cmd.args(["spider", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--reasoning-effort"));
+}

@@ -7,9 +7,7 @@ use serde_json::{Value, json};
 use tracing::warn;
 use url::Url;
 
-mod trust;
-
-pub use trust::{TrustTier, classify_trust_tier};
+pub use crate::trust::TrustTier;
 
 #[derive(Debug, Clone)]
 pub struct UserRequest {
@@ -41,7 +39,6 @@ pub struct CrawlResult {
 struct LinkCandidate {
     url: Url,
     anchor_text: String,
-    trust_tier: TrustTier,
 }
 
 const MIN_HOST_INTERVAL: Duration = Duration::from_millis(150);
@@ -67,11 +64,17 @@ impl Frontier {
         }
     }
 
-    fn pop(&mut self) -> Option<(Url, usize)> {
-        self.high
-            .pop_front()
-            .or_else(|| self.medium.pop_front())
-            .or_else(|| self.low.pop_front())
+    fn pop(&mut self) -> Option<(Url, usize, TrustTier)> {
+        if let Some((url, depth)) = self.high.pop_front() {
+            return Some((url, depth, TrustTier::High));
+        }
+        if let Some((url, depth)) = self.medium.pop_front() {
+            return Some((url, depth, TrustTier::Medium));
+        }
+        if let Some((url, depth)) = self.low.pop_front() {
+            return Some((url, depth, TrustTier::Low));
+        }
+        None
     }
 }
 
@@ -95,8 +98,7 @@ pub fn crawl_with_fetcher(
 
     let mut frontier = Frontier::default();
     for hit in hits {
-        let tier = classify_trust_tier(&hit.url);
-        frontier.push(hit.url, 0usize, tier);
+        frontier.push(hit.url, 0usize, hit.trust_tier);
     }
 
     let mut visited = HashSet::<String>::new();
@@ -109,7 +111,7 @@ pub fn crawl_with_fetcher(
             break;
         }
 
-        let Some((url, depth)) = frontier.pop() else {
+        let Some((url, depth, trust_tier)) = frontier.pop() else {
             break;
         };
 
@@ -140,7 +142,6 @@ pub fn crawl_with_fetcher(
             last_request_by_host.insert(host, Instant::now());
         }
 
-        let trust_tier = classify_trust_tier(&url);
         let scraped = match fetcher.fetch(&url) {
             Ok(scraped) => scraped,
             Err(err) => {
@@ -174,6 +175,10 @@ pub fn crawl_with_fetcher(
             excerpt,
         });
 
+        if sources.len() >= request.max_pages {
+            break;
+        }
+
         if depth >= request.max_depth {
             continue;
         }
@@ -196,11 +201,9 @@ pub fn crawl_with_fetcher(
                 .get(&normalize_url(&link_url))
                 .cloned()
                 .unwrap_or_default();
-            let trust_tier = classify_trust_tier(&link_url);
             candidates.push(LinkCandidate {
                 url: link_url,
                 anchor_text,
-                trust_tier,
             });
             if candidates.len() >= request.max_child_candidates {
                 break;
@@ -211,11 +214,7 @@ pub fn crawl_with_fetcher(
             continue;
         }
 
-        candidates.sort_by(|a, b| {
-            a.trust_tier
-                .cmp(&b.trust_tier)
-                .then_with(|| a.url.as_str().cmp(b.url.as_str()))
-        });
+        candidates.sort_by(|a, b| a.url.as_str().cmp(b.url.as_str()));
 
         let candidate_values = candidates
             .iter()
@@ -223,35 +222,26 @@ pub fn crawl_with_fetcher(
                 json!({
                     "url": c.url.as_str(),
                     "anchor_text": c.anchor_text,
-                    "trust_tier": format!("{:?}", c.trust_tier),
                 })
             })
             .collect::<Vec<Value>>();
 
-        let selected = if candidates.len() <= request.max_children_per_page {
-            candidates
-                .iter()
-                .take(request.max_children_per_page)
-                .map(|c| c.url.clone())
-                .collect::<Vec<_>>()
-        } else {
-            openai
-                .select_child_links(
-                    &request.query,
-                    &url,
-                    sources.last().map(|s| s.excerpt.as_str()).unwrap_or(""),
-                    &candidate_values,
-                    request.max_children_per_page,
-                )
-                .with_context(|| format!("select child links: {url}"))?
-        };
+        let selected = openai
+            .select_child_links(
+                &request.query,
+                &url,
+                sources.last().map(|s| s.excerpt.as_str()).unwrap_or(""),
+                &candidate_values,
+                request.max_children_per_page,
+            )
+            .with_context(|| format!("select child links: {url}"))?;
 
-        for child_url in selected {
+        for selected_link in selected {
+            let child_url = selected_link.url;
             if !is_allowed(&child_url, request.allow_local) {
                 continue;
             }
-            let child_tier = classify_trust_tier(&child_url);
-            frontier.push(child_url, depth + 1, child_tier);
+            frontier.push(child_url, depth + 1, selected_link.trust_tier);
         }
     }
 

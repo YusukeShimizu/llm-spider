@@ -74,11 +74,12 @@
   max_children_per_page = 3
   ```
 
-### M2: Trust 分類（URL / ドメイン）
+### M2: Trust 分類（LLM）
 
 #### 観測可能な成果
 
 - `TrustTier::{High,Medium,Low}` と判定規則（例: `*.gov`, `*.edu`, `*.ac.*`, `*.go.jp` など）を実装し、URL/ドメインから決定できる。
+- `TrustTier::{High,Medium,Low}` を実装し、LLM が URL などから `TrustTier` を判定できる。
 - フォールバックが発生した場合、最終出力の出典一覧に `TrustTier` が必ず表示される。
 
 ### M3: OpenAI Search によるページ特定（初期 URL 収集）
@@ -152,7 +153,7 @@
 ### Decisions（重要判断）
 
 - MVP は「信頼性（trust）優先」を固定し、関連性（relevance）は最低限（search 順序）から開始する。
-- Trust は連続スコアにせず `TrustTier` の離散のみとし、判定規則はハードコードする。
+- Trust は連続スコアにせず `TrustTier` の離散のみとし、判定は LLM に委ねる。
 - OpenAI Search を必須の入口とする。
   CI と Integration Test は外部ネットワークへ依存しない。
 - 関連性の特定は LLM を導入し、子ページ（リンク）選定に使う。

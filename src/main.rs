@@ -46,6 +46,10 @@ fn try_main() -> anyhow::Result<()> {
             );
 
             let openai = llm_spider::openai::OpenAiClient::from_env().context("init openai")?;
+            let openai = match args.reasoning_effort {
+                Some(effort) => openai.with_reasoning_effort(effort),
+                None => openai,
+            };
             let result = llm_spider::spider::crawl(&request, &openai).context("crawl")?;
             let markdown = llm_spider::spider::compose_markdown(&request, &result);
             print!("{markdown}");
