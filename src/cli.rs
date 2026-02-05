@@ -13,14 +13,7 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    Hello(HelloArgs),
     Spider(SpiderArgs),
-}
-
-#[derive(Debug, Args)]
-pub struct HelloArgs {
-    #[arg(long)]
-    pub name: Option<String>,
 }
 
 #[derive(Debug, Args)]

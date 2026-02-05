@@ -19,10 +19,6 @@ fn try_main() -> anyhow::Result<()> {
     tracing::debug!(?cli, "parsed cli");
 
     match cli.command {
-        llm_spider::cli::Command::Hello(args) => {
-            let message = llm_spider::greeting::hello(args.name.as_deref());
-            println!("{message}");
-        }
         llm_spider::cli::Command::Spider(args) => {
             let request = llm_spider::spider::UserRequest {
                 query: args.query,

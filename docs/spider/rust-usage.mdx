@@ -1,40 +1,32 @@
 ---
-title: Use as a Rust library
-description: Call llm-spider from Rust (crawl + Markdown output).
+title: Rust library
+description: Use llm-spider as a library.
 ---
 
 `llm-spider` is both a CLI and a Rust library.
-The library API lets you run a constrained crawl and produce Markdown that includes sources and `TrustTier`.
 
-## Add as a dependency
+## Dependency
 
 This repository is not published to crates.io by default.
 Use a path (or git) dependency.
 
 ```toml
 [dependencies]
-anyhow = "1"
 llm-spider = { path = "../llm-spider" }
 ```
 
-## Required environment variables
+## Environment
 
-- `OPENAI_API_KEY`: OpenAI API key (required)
-- `OPENAI_BASE_URL`: Override the API base URL (optional)
-- `LLM_SPIDER_OPENAI_SEARCH_MODEL`: Model for web search (optional)
-- `LLM_SPIDER_OPENAI_SELECT_MODEL`: Model for child-link selection (optional)
-- `LLM_SPIDER_OPENAI_REASONING_EFFORT`: `none|minimal|low|medium|high|xhigh` (default: `medium`)
+- `OPENAI_API_KEY` is required.
+- Optional: `OPENAI_BASE_URL`, `LLM_SPIDER_OPENAI_*`.
 
-`reasoning.effort` is only sent for reasoning-capable models (GPT-5 and o-series).
-For other models, it is ignored.
-
-## Minimal example
+## Example
 
 ```rust
 use std::time::Duration;
 
 use anyhow::Context as _;
-use llm_spider::openai::{OpenAiClient, ReasoningEffort};
+use llm_spider::openai::OpenAiClient;
 use llm_spider::spider::{compose_markdown, crawl, UserRequest};
 
 fn main() -> anyhow::Result<()> {
@@ -53,18 +45,10 @@ fn main() -> anyhow::Result<()> {
         allow_local: false,
     };
 
-    let openai = OpenAiClient::from_env()
-        .context("init OpenAI client")?
-        .with_reasoning_effort(ReasoningEffort::Medium);
-
+    let openai = OpenAiClient::from_env().context("init OpenAI client")?;
     let result = crawl(&request, &openai).context("crawl")?;
     let markdown = compose_markdown(&request, &result);
     println!("{markdown}");
     Ok(())
 }
 ```
-
-## Notes
-
-- Logging is powered by `tracing` and controlled via `RUST_LOG`.
-- Crawling respects `robots.txt` and applies host-level rate limiting.

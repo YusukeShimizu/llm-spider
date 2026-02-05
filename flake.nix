@@ -1,5 +1,5 @@
 {
-  description = "Rust template repository (dev env via Nix Flakes)";
+  description = "LLM Spider (dev env via Nix Flakes)";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -49,8 +49,6 @@
         devShells.default = pkgs.mkShell {
           packages =
             (with pkgs; [
-              api-linter
-              buf
               cargo
               clippy
               git

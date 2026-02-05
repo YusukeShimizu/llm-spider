@@ -1,9 +1,9 @@
 # LLM Spider
 
-このリポジトリは、自然言語クエリから OpenAI Search でページを特定し、
-制約付きクロールで情報収集し、
-出典付き Markdown を生成する CLI（`llm-spider`）である。
-開発環境は Nix Flakes を正とし、ローカルの環境変数は direnv（`.envrc`）で管理する。
+`llm-spider` is a Rust CLI.
+It finds pages via OpenAI web search.
+It crawls under strict budgets.
+It prints Markdown with sources.
 
 ## Quick start
 
@@ -12,68 +12,17 @@ direnv allow
 just ci
 ```
 
-direnv を使わない場合は、次を実行する。
+Without direnv:
 
 ```sh
 nix develop -c just ci
 ```
 
-## rust-analyzer（VS Code）
-
-rust-analyzer が標準ライブラリ（`std`）を解析できるように、次を設定する。
-
-- Nix devShell で `RUST_SRC_PATH` を設定する。
-- direnv で `rust-lib-src`（標準ライブラリソースへの symlink）を作成する。
-- `.vscode/settings.json` で `rust-analyzer.cargo.sysrootSrc` を `${workspaceFolder}/rust-lib-src` に向ける。
-
-## 実行例
-
-```sh
-cargo run -- hello
-cargo run -- hello --name Alice
-```
-
-`spider` サブコマンドで、自然言語クエリから OpenAI Search でページを特定し、
-制約付きでクロールして Markdown を出力する。
-クロールは `robots.txt` を尊重する。
+## Run
 
 ```sh
 export OPENAI_API_KEY=...
 cargo run -- spider --query "example query"
 ```
 
-## Logging
-
-`RUST_LOG` でログの詳細度を切り替える。
-
-```sh
-echo 'export RUST_LOG=debug' > .envrc.local
-direnv allow
-cargo run -- hello
-```
-
-## Protobuf（Buf）
-
-Protobuf スキーマは `proto/` 配下で管理し、Buf で lint/format する。
-
-```sh
-buf lint
-buf format -w
-```
-
-例として、AIP 準拠の Resource Oriented API と Protovalidate を使ったスキーマを
-`proto/template/v1/greetings.proto` に含める。
-
-## ドキュメント（Mintlify）
-
-Mintlify で動かすことを前提に、ドキュメントは `docs/` 配下に置く。
-
-- 設定: `docs/docs.json`
-- Vale: `docs/.vale.ini`
-
-CI では `just ci` がドキュメントの検査も実行する。
-
-## テンプレートの置換
-
-- `Cargo.toml` の `name` は `llm-spider` である。
-- `tests/` はバイナリ名（`cargo_bin("llm-spider")`）に追従する。
+For debug logs, set `RUST_LOG=debug`.
