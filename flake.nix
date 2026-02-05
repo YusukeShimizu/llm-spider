@@ -55,6 +55,8 @@
               just
               mermaid-cli
               nodejs_20
+              openssl
+              pkg-config
               rust-analyzer
               rustLibSrc
               rustc
