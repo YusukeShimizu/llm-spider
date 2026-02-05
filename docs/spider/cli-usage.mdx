@@ -1,0 +1,44 @@
+---
+title: CLI
+description: Run llm-spider as a CLI.
+---
+
+`llm-spider` prints Markdown to stdout.
+Logs go to stderr.
+
+## Environment
+
+- `OPENAI_API_KEY` is required.
+- Optional: `OPENAI_BASE_URL`, `LLM_SPIDER_OPENAI_*`.
+
+## Run
+
+```sh
+cargo run -- spider --query "example query"
+```
+
+## Budgets
+
+The crawl is constrained by budgets.
+
+- `--max-pages`: Maximum pages to fetch.
+- `--max-depth`: Maximum link depth.
+- `--max-elapsed`: Maximum elapsed time (for example, `30s`).
+- `--max-chars`: Maximum output size.
+
+Example:
+
+```sh
+cargo run -- spider \
+  --query "example query" \
+  --max-pages 10 \
+  --max-depth 1 \
+  --max-elapsed 20s \
+  --max-chars 4000
+```
+
+## Help
+
+```sh
+cargo run -- spider --help
+```
