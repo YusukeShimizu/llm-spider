@@ -34,8 +34,8 @@ For debug logs, set `RUST_LOG=debug`.
 Optional environment variables:
 
 - `OPENAI_BASE_URL` (default: `https://api.openai.com/v1/`)
-- `LLM_SPIDER_OPENAI_SEARCH_MODEL` (default: `gpt-4o-mini`)
-- `LLM_SPIDER_OPENAI_SELECT_MODEL` (default: `gpt-4o-mini`)
+- `LLM_SPIDER_OPENAI_SEARCH_MODEL` (default: `gpt-5.2`)
+- `LLM_SPIDER_OPENAI_SELECT_MODEL` (default: `gpt-5.2`)
 - `LLM_SPIDER_OPENAI_REASONING_EFFORT` (default: `medium`)
 
 For all CLI flags, run:

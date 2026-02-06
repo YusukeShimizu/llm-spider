@@ -20,6 +20,24 @@ llm-spider = { path = "../llm-spider" }
 - `OPENAI_API_KEY` is required.
 - Optional: `OPENAI_BASE_URL`, `LLM_SPIDER_OPENAI_*`.
 
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LLM_SPIDER_OPENAI_SEARCH_MODEL` | `gpt-5.2` | Model for web search |
+| `LLM_SPIDER_OPENAI_SELECT_MODEL` | `gpt-5.2` | Model for child link selection |
+| `LLM_SPIDER_OPENAI_REASONING_EFFORT` | `medium` | Reasoning effort |
+
+## Content extraction
+
+Each crawled page is processed with `readability-rust` (Mozilla Readability
+port) to extract the article body, then converted to Markdown with `htmd`.
+The result is stored in `Source::content`.
+If extraction fails, `content` falls back to the plain-text excerpt.
+
+`compose_markdown()` outputs each page's full Markdown content.
+When `max_chars > 0`, pages are included until adding the next page would
+exceed the limit (page-boundary granularity; at least one page is always
+included).
+
 ## Example
 
 ```rust
@@ -47,6 +65,14 @@ fn main() -> anyhow::Result<()> {
 
     let openai = OpenAiClient::from_env().context("init OpenAI client")?;
     let result = crawl(&request, &openai).context("crawl")?;
+
+    // Each source has `content` (full Markdown) and `excerpt` (plain text).
+    for source in &result.sources {
+        println!("URL: {}", source.url);
+        println!("Trust: {:?}", source.trust_tier);
+        println!("Content length: {} chars", source.content.len());
+    }
+
     let markdown = compose_markdown(&request, &result);
     println!("{markdown}");
     Ok(())

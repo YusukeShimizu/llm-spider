@@ -170,19 +170,74 @@ fn spider_respects_max_depth_zero() {
 }
 
 #[test]
-fn spider_output_respects_max_chars() {
+fn spider_output_includes_full_content() {
     let start = "https://example.test/start";
     let openai = FakeOpenAi::default().with_hits(vec![start]);
-    let fetcher = FakeFetcher::default().with_page(start, "<main>hello</main>", vec![]);
+    let fetcher = FakeFetcher::default().with_page(
+        start,
+        "<html><body><p>Hello world from the readable content extractor.</p></body></html>",
+        vec![],
+    );
 
     let mut req = request("q");
     req.max_pages = 1;
     req.max_depth = 0;
-    req.max_chars = 80;
+    req.max_chars = 0; // no limit
 
     let result = crawl_with_fetcher(&req, &openai, &fetcher).expect("crawl");
     let markdown = llm_spider::spider::compose_markdown(&req, &result);
-    assert!(markdown.chars().count() <= 80);
+    // The first page is always included; output contains the content
+    assert!(markdown.contains("Hello world"));
+}
+
+#[test]
+fn spider_max_chars_stops_at_page_boundary() {
+    let page_a = "https://example.test/a";
+    let page_b = "https://example.test/b";
+    let openai = FakeOpenAi::default().with_hits(vec![page_a, page_b]);
+
+    let long_body_a =
+        "<html><body><p>AAAA content that is moderately long for page A.</p></body></html>";
+    let long_body_b =
+        "<html><body><p>BBBB content that is moderately long for page B.</p></body></html>";
+    let fetcher = FakeFetcher::default()
+        .with_page(page_a, long_body_a, vec![])
+        .with_page(page_b, long_body_b, vec![]);
+
+    // First, crawl with no limit to see full output size with both pages.
+    let mut req = request("q");
+    req.max_pages = 2;
+    req.max_depth = 0;
+    req.max_chars = 0;
+
+    let result = crawl_with_fetcher(&req, &openai, &fetcher).expect("crawl");
+    assert_eq!(result.sources.len(), 2);
+
+    let full_md = llm_spider::spider::compose_markdown(&req, &result);
+    assert!(full_md.contains("AAAA"));
+    assert!(full_md.contains("BBBB"));
+
+    // Now set max_chars so that only the first page fits.
+    // Use a limit that is larger than page A alone but smaller than both pages together.
+    let one_page_md = {
+        let mut r = req.clone();
+        r.max_chars = 0; // temp: get single page size
+        r.max_pages = 2;
+        let single = llm_spider::spider::CrawlResult {
+            sources: vec![result.sources[0].clone()],
+        };
+        llm_spider::spider::compose_markdown(&r, &single)
+    };
+
+    // Set max_chars between single-page and two-page output sizes
+    req.max_chars = one_page_md.chars().count() + 10;
+
+    let capped_md = llm_spider::spider::compose_markdown(&req, &result);
+    assert!(capped_md.contains("AAAA"), "first page must be included");
+    assert!(
+        !capped_md.contains("BBBB"),
+        "second page should be excluded by max_chars"
+    );
 }
 
 #[test]

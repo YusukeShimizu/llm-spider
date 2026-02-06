@@ -28,6 +28,7 @@ pub struct Source {
     pub url: Url,
     pub trust_tier: TrustTier,
     pub excerpt: String,
+    pub content: String,
 }
 
 #[derive(Debug)]
@@ -169,10 +170,18 @@ pub fn crawl_with_fetcher(
                 }
             };
 
+        let content = extract_readable_content(&scraped.html)
+            .filter(|md| !md.trim().is_empty())
+            .unwrap_or_else(|| {
+                warn!(url = %url, "readability extraction failed; falling back to excerpt");
+                excerpt.clone()
+            });
+
         sources.push(Source {
             url: url.clone(),
             trust_tier,
             excerpt,
+            content,
         });
 
         if sources.len() >= request.max_pages {
@@ -258,41 +267,45 @@ pub fn compose_markdown(request: &UserRequest, result: &CrawlResult) -> String {
     out.push('\n');
 
     out.push_str("## Findings\n\n");
+    let mut included_count = 0usize;
+
     if result.sources.is_empty() {
         out.push_str("- No sources collected.\n");
     } else {
         for source in &result.sources {
-            out.push_str("- ");
-            out.push_str(&format!(
-                "[{:?}] {}",
-                source.trust_tier,
-                escape_md_inline(source.url.as_str())
-            ));
-            out.push('\n');
-            if !source.excerpt.is_empty() {
-                out.push_str("  - ");
-                out.push_str(&escape_md_inline(&source.excerpt));
-                out.push('\n');
+            let mut page_block = String::new();
+            page_block.push_str(&format!("### [{:?}] {}\n\n", source.trust_tier, source.url,));
+            page_block.push_str(&source.content);
+            page_block.push_str("\n\n");
+
+            if request.max_chars > 0 && included_count > 0 {
+                let new_total = out.chars().count() + page_block.chars().count();
+                if new_total > request.max_chars {
+                    break;
+                }
             }
+
+            out.push_str(&page_block);
+            included_count += 1;
         }
     }
     out.push('\n');
 
     out.push_str("## Sources\n\n");
-    for source in &result.sources {
+    for source in result.sources.iter().take(included_count) {
         out.push_str("- ");
         out.push_str(&format!("[{:?}] {}", source.trust_tier, source.url));
         out.push('\n');
     }
 
-    if result.sources.len() < request.min_sources {
+    if included_count < request.min_sources {
         out.push('\n');
         out.push_str("## Notes\n\n");
         out.push_str("- `min_sources` を満たせなかった。\n");
         out.push_str("- 収集制約（`max_pages` / `max_depth` / `max_elapsed`）を見直す。\n");
     }
 
-    truncate_to_char_limit(out, request.max_chars)
+    out
 }
 
 fn normalize_url(url: &Url) -> String {
@@ -509,26 +522,23 @@ fn truncate_chars(text: &str, max_chars: usize) -> String {
     text.chars().take(max_chars).collect()
 }
 
-fn truncate_to_char_limit(mut text: String, max_chars: usize) -> String {
-    if max_chars == 0 {
-        return String::new();
-    }
-    if text.chars().count() <= max_chars {
-        return text;
+fn extract_readable_content(html: &str) -> Option<String> {
+    use readability_rust::Readability;
+
+    let mut readability = Readability::new(html, None).ok()?;
+    let article = readability.parse()?;
+
+    let content_html = article.content?;
+    if content_html.trim().is_empty() {
+        return None;
     }
 
-    let mut end_byte = 0usize;
-    for (i, (byte_idx, _)) in text.char_indices().enumerate() {
-        if i == max_chars {
-            end_byte = byte_idx;
-            break;
-        }
+    let md = htmd::convert(&content_html).ok()?;
+    if md.trim().is_empty() {
+        return None;
     }
-    if end_byte == 0 {
-        end_byte = text.len();
-    }
-    text.truncate(end_byte);
-    text
+
+    Some(md)
 }
 
 fn escape_md_inline(text: &str) -> String {

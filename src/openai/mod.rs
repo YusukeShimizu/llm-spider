@@ -137,9 +137,9 @@ impl OpenAiClient {
         let base_url = Url::parse(&base_url).context("parse OPENAI_BASE_URL")?;
 
         let search_model = std::env::var("LLM_SPIDER_OPENAI_SEARCH_MODEL")
-            .unwrap_or_else(|_| "gpt-4o-mini".to_owned());
+            .unwrap_or_else(|_| "gpt-5.2".to_owned());
         let select_model = std::env::var("LLM_SPIDER_OPENAI_SELECT_MODEL")
-            .unwrap_or_else(|_| "gpt-4o-mini".to_owned());
+            .unwrap_or_else(|_| "gpt-5.2".to_owned());
         let reasoning_effort = std::env::var("LLM_SPIDER_OPENAI_REASONING_EFFORT")
             .ok()
             .and_then(|value| value.parse::<ReasoningEffort>().ok())
